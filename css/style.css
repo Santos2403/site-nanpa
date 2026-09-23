@@ -420,7 +420,32 @@ input, textarea {
 }
 
 @media (max-width: 900px) {
-    .hero-robot { display: none; }
+    .hero {
+        flex-direction: column;
+    }
+    .hero .container {
+        order: 1;
+    }
+    .hero-robot {
+        order: 2;
+        position: relative;
+        right: auto;
+        bottom: auto;
+        width: 100%;
+        max-width: 320px;
+        margin: 0.75rem auto 0;
+        opacity: 0.95;
+        z-index: 1;
+        -webkit-mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, black 65%, transparent 95%);
+        mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, black 65%, transparent 95%);
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-robot {
+        max-width: 250px;
+        margin: 0.5rem auto 0;
+    }
 }
 
 .hero .container {
