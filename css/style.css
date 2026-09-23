@@ -2717,6 +2717,14 @@ body.nav-open .whatsapp-float {
 
 /* ---- Tablet (768px) ---- */
 @media (max-width: 768px) {
+    /* Hero — remove espaço vazio: trocar centro por topo com padding */
+    .hero {
+        min-height: auto;
+        align-items: flex-start;
+        padding-top: calc(var(--nav-height) + 2.5rem);
+        padding-bottom: 3.5rem;
+    }
+
     /* Hero — espaçamento compacto */
     .hero .container        { gap: clamp(0.9rem, 3.5vw, 1.4rem); }
     .hero-subtitle          { font-size: var(--font-size-base); line-height: 1.65; }
@@ -2740,8 +2748,11 @@ body.nav-open .whatsapp-float {
 
 /* ---- Mobile pequeno (480px) ---- */
 @media (max-width: 480px) {
-    /* Usa svh para evitar barra de endereço no Safari */
-    .hero                   { min-height: 100svh; }
+    /* Hero sem espaço vazio — padding reduzido */
+    .hero {
+        padding-top: calc(var(--nav-height) + 1.5rem);
+        padding-bottom: 2.5rem;
+    }
     .hero .container        { gap: 0.9rem; }
     .hero-badge             { font-size: 0.68rem; padding: 5px 13px; }
     .hero h1                { font-size: clamp(1.75rem, 7vw, 2.25rem); line-height: 1.15; }
