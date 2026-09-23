@@ -28,30 +28,41 @@ function initNavigation() {
         lastScroll = scrollY;
     }, { passive: true });
 
+    // Create nav overlay backdrop (tap outside to close)
+    const navOverlay = document.createElement('div');
+    navOverlay.className = 'nav-overlay';
+    document.body.appendChild(navOverlay);
+
+    // Helper: close mobile menu
+    const closeMenu = () => {
+        navMenu.classList.remove('open');
+        navToggle.classList.remove('active');
+        navOverlay.classList.remove('visible');
+        document.body.classList.remove('nav-open');
+        document.body.style.overflow = '';
+    };
+
     // Mobile menu toggle
     navToggle.addEventListener('click', () => {
         const isOpen = navMenu.classList.toggle('open');
         navToggle.classList.toggle('active');
+        navOverlay.classList.toggle('visible', isOpen);
+        document.body.classList.toggle('nav-open', isOpen);
         document.body.style.overflow = isOpen ? 'hidden' : '';
     });
 
+    // Close menu on overlay tap
+    navOverlay.addEventListener('click', closeMenu);
+
     // Close mobile menu on link click
     navLinks.forEach(link => {
-        link.addEventListener('click', () => {
-            navMenu.classList.remove('open');
-            navToggle.classList.remove('active');
-            document.body.style.overflow = '';
-        });
+        link.addEventListener('click', closeMenu);
     });
 
     // Also close on CTA click
     const navCta = document.querySelector('.nav-cta');
     if (navCta) {
-        navCta.addEventListener('click', () => {
-            navMenu.classList.remove('open');
-            navToggle.classList.remove('active');
-            document.body.style.overflow = '';
-        });
+        navCta.addEventListener('click', closeMenu);
     }
 
     // Scroll Spy — highlight active nav link
