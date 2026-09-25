@@ -272,15 +272,15 @@ if ($retryAfter > 0) fail(429, 'rate_limited', ["Retry-After: $retryAfter"]);
 $ct = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
 if (strpos($ct, 'application/json') === false) fail(415, 'bad_content_type');
 
-$raw = file_get_contents('php://input', false, null, 0, 2049);
-if ($raw === false || strlen($raw) > 2048) fail(413, 'bad_payload_size');
+$raw = file_get_contents('php://input', false, null, 0, 16385);
+if ($raw === false || strlen($raw) > 16384) fail(413, 'bad_payload_size');
 
 $body = @json_decode($raw, true);
 if (!is_array($body) || isset($body[0])) fail(400, 'bad_json');
 
-// Token reCAPTCHA v3: base64url + ponto separador, minimo 20 chars
+// Token reCAPTCHA v3: base64url + ponto separador, pode ter mais de 2KB
 $token = isset($body['token']) && is_string($body['token']) ? $body['token'] : '';
-if (strlen($token) < 20 || strlen($token) > 4096 || !preg_match('/^[A-Za-z0-9_\-\.]+$/', $token)) {
+if (strlen($token) < 20 || strlen($token) > 8192 || !preg_match('/^[A-Za-z0-9_\-\.]+$/', $token)) {
     fail(400, 'bad_token_format');
 }
 
