@@ -21,13 +21,16 @@
     <!-- Favicon -->
     <link rel="icon" href="assets/img/logo.png" type="image/png">
 
-    <!-- Cloudflare Turnstile: a site key (pública) é lida pelo JS em tempo de execução.
-         Substitua o valor abaixo pela sua site key real gerada no painel Cloudflare.
-         A SECRET KEY jamais deve aparecer aqui — ela vive apenas em variáveis de ambiente do servidor.
-         Painel: https://dash.cloudflare.com → Turnstile → Add site -->
-    <meta name="turnstile-sitekey" content="COLOQUE_AQUI_A_SITE_KEY">
-    <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
-    <link rel="dns-prefetch" href="https://challenges.cloudflare.com">
+    <!-- Google reCAPTCHA v3: a site key (pública) é lida pelo JS em tempo de execução.
+         Substitua o valor abaixo pela sua site key real gerada no painel do Google.
+         A SECRET KEY jamais deve aparecer aqui — ela vive apenas no servidor (whatsapp.env).
+         Painel: https://www.google.com/recaptcha/admin → Create → reCAPTCHA v3
+         Domínio a registrar: nanpatec.com.br -->
+    <meta name="recaptcha-sitekey" content="COLOQUE_AQUI_A_SITE_KEY_RECAPTCHA">
+    <link rel="preconnect" href="https://www.google.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://www.google.com">
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
 
     <!-- Stylesheet -->
     <link rel="stylesheet" href="css/style.css">

@@ -275,42 +275,41 @@ function initContactForm() {
     });
 }
 
-/* ---- WhatsApp protegido: Turnstile + validação no servidor ---- */
+/* ---- WhatsApp protegido: reCAPTCHA v3 + valida\u00e7\u00e3o no servidor ---- */
 function initCaptchaVerification() {
     const modal = document.getElementById('captcha-modal');
     if (!modal) return;
 
-    const overlay = document.getElementById('captcha-overlay');
+    const overlay  = document.getElementById('captcha-overlay');
     const closeBtn = document.getElementById('captcha-close');
     const retryBtn = document.getElementById('captcha-btn');
     const openLink = document.getElementById('wa-open-link');
     const feedback = document.getElementById('captcha-feedback');
-    const widgetEl = document.getElementById('wa-turnstile');
     const triggers = document.querySelectorAll('.wa-captcha-link');
 
-    const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-    const TEST_SITEKEY = '1x00000000000000000000AA';
-    const metaKey = (document.querySelector('meta[name="turnstile-sitekey"]') || {}).content || '';
-    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
-    const siteKey = /^[\w-]{10,}$/.test(metaKey) && !metaKey.startsWith('COLOQUE') ? metaKey : (isLocal ? TEST_SITEKEY : '');
+    const metaKey  = (document.querySelector('meta[name="recaptcha-sitekey"]') || {}).content || '';
+    const siteKey  = /^[A-Za-z0-9_-]{20,}$/.test(metaKey) && !metaKey.startsWith('COLOQUE') ? metaKey : '';
 
     let scriptPromise = null;
-    let widgetId = null;
     let busy = false;
     let timeoutId = null;
 
-    function loadTurnstile() {
-        if (window.turnstile) return Promise.resolve(window.turnstile);
+    // Carrega o script do reCAPTCHA s\u00f3 quando necess\u00e1rio (lazy load)
+    function loadRecaptcha() {
+        if (window.grecaptcha && window.grecaptcha.execute) return Promise.resolve(window.grecaptcha);
         if (scriptPromise) return scriptPromise;
         scriptPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = TURNSTILE_SRC;
+            script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
             script.async = true;
-            script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('turnstile')));
+            script.onload = () => {
+                // grecaptcha \u00e9 criado assincronamente; espera pelo ready()
+                window.grecaptcha.ready(() => resolve(window.grecaptcha));
+            };
             script.onerror = () => {
                 scriptPromise = null;
                 script.remove();
-                reject(new Error('turnstile'));
+                reject(new Error('recaptcha'));
             };
             document.head.appendChild(script);
         });
@@ -343,7 +342,7 @@ function initCaptchaVerification() {
         busy = false;
     }
 
-    const GENERIC_ERROR = 'Serviço temporariamente indisponível. Tente novamente ou use nosso e-mail.';
+    const GENERIC_ERROR = 'Servi\u00e7o temporariamente indispon\u00edvel. Tente novamente ou use nosso e-mail.';
 
     async function requestWhatsAppUrl(token) {
         let res;
@@ -359,7 +358,7 @@ function initCaptchaVerification() {
                 body: JSON.stringify({ token }),
             });
         } catch {
-            return showError('Falha de conexão. Verifique sua internet e tente novamente.');
+            return showError('Falha de conex\u00e3o. Verifique sua internet e tente novamente.');
         }
         if (!busy) return;
 
@@ -368,7 +367,7 @@ function initCaptchaVerification() {
 
         if (!res.ok || !data || !data.ok) {
             if (res.status === 429) return showError('Muitas tentativas seguidas. Aguarde um minuto e tente novamente.');
-            if (res.status === 403) return showError('Não foi possível confirmar a verificação. Tente novamente.');
+            if (res.status === 403) return showError('N\u00e3o foi poss\u00edvel confirmar a verifica\u00e7\u00e3o. Tente novamente.');
             return showError(GENERIC_ERROR);
         }
 
@@ -382,14 +381,14 @@ function initCaptchaVerification() {
         clearTimeout(timeoutId);
         openLink.href = target.href;
 
-        // Navegadores podem bloquear popup após chamada assíncrona; nesse caso o link manual aparece.
+        // Navegadores podem bloquear popup ap\u00f3s chamada ass\u00edncrona; o link manual aparece como fallback.
         const win = window.open(target.href, '_blank');
         if (win) {
             try { win.opener = null; } catch {}
-            setStatus('✓ Verificado! Abrindo WhatsApp...', 'success');
+            setStatus('\u2713 Verificado! Abrindo WhatsApp...', 'success');
             setTimeout(closeModal, 600);
         } else {
-            setStatus('✓ Verificado! Toque no botão abaixo para abrir o WhatsApp.', 'success');
+            setStatus('\u2713 Verificado! Toque no bot\u00e3o abaixo para abrir o WhatsApp.', 'success');
             openLink.hidden = false;
         }
     }
@@ -400,40 +399,39 @@ function initCaptchaVerification() {
         retryBtn.hidden = true;
         openLink.hidden = true;
         openLink.href = '#';
-        setStatus('Verificando conexão segura...');
+        setStatus('Verificando conex\u00e3o segura...');
 
-        if (!siteKey) return showError('Verificação indisponível no momento. Use nosso e-mail para contato.');
+        if (!siteKey) {
+            return showError('Verifica\u00e7\u00e3o indispon\u00edvel no momento. Use nosso e-mail para contato.');
+        }
 
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
-            if (busy) showError('A verificação demorou mais que o esperado. Tente novamente.');
+            if (busy) showError('A verifica\u00e7\u00e3o demorou mais que o esperado. Tente novamente.');
         }, 20000);
 
-        let ts;
+        let rc;
         try {
-            ts = await loadTurnstile();
+            rc = await loadRecaptcha();
         } catch {
-            return showError('Não foi possível carregar a verificação. Verifique bloqueadores de conteúdo e tente novamente.');
+            return showError('N\u00e3o foi poss\u00edvel carregar a verifica\u00e7\u00e3o. Verifique bloqueadores de conte\u00fado e tente novamente.');
         }
         if (!busy) return;
 
-        if (widgetId === null) {
-            widgetId = ts.render(widgetEl, {
-                sitekey: siteKey,
-                action: 'whatsapp',
-                appearance: 'interaction-only',
-                language: 'pt-br',
-                callback: token => { if (busy) requestWhatsAppUrl(token); },
-                'error-callback': () => { showError('Falha na verificação. Tente novamente.'); return true; },
-                'expired-callback': () => ts.reset(widgetId),
-                'timeout-callback': () => showError('A verificação expirou. Tente novamente.'),
-            });
-        } else {
-            ts.reset(widgetId);
+        let token;
+        try {
+            // reCAPTCHA v3: invis\u00edvel, analisa comportamento e retorna token com score
+            token = await rc.execute(siteKey, { action: 'whatsapp' });
+        } catch {
+            return showError('Falha na verifica\u00e7\u00e3o. Tente novamente.');
         }
+        if (!busy) return;
+
+        await requestWhatsAppUrl(token);
     }
 
-    const warmUp = () => { if (siteKey) loadTurnstile().catch(() => {}); };
+    // Pr\u00e9-aquece o script reCAPTCHA no hover/focus (reduz lat\u00eancia percebida)
+    const warmUp = () => { if (siteKey) loadRecaptcha().catch(() => {}); };
 
     triggers.forEach(link => {
         link.addEventListener('pointerenter', warmUp, { once: true });
@@ -447,10 +445,7 @@ function initCaptchaVerification() {
     });
 
     openLink.addEventListener('click', e => {
-        if (openLink.getAttribute('href') === '#') {
-            e.preventDefault();
-            return;
-        }
+        if (openLink.getAttribute('href') === '#') { e.preventDefault(); return; }
         setTimeout(closeModal, 300);
     });
     retryBtn.addEventListener('click', startVerification);

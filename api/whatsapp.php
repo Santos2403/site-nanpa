@@ -1,8 +1,8 @@
-﻿<?php
+<?php
 /**
  * POST /api/whatsapp.php
  *
- * Valida o token Cloudflare Turnstile no servidor e so entao devolve
+ * Valida o token Google reCAPTCHA v3 no servidor e so entao devolve
  * o link do WhatsApp. O numero de telefone vive apenas no arquivo .env
  * (fora do document root) ou em variavel de ambiente do servidor.
  *
@@ -13,7 +13,6 @@ declare(strict_types=1);
 
 // Carrega arquivo de configuracao fora do document root
 // Caminho recomendado no Hostinger: /home/u123456789/env/whatsapp.env
-// (um nivel acima do public_html)
 $envFile = dirname(__DIR__, 2) . '/env/whatsapp.env';
 if (is_file($envFile) && is_readable($envFile)) {
     foreach (parse_ini_file($envFile) as $k => $v) {
@@ -21,12 +20,13 @@ if (is_file($envFile) && is_readable($envFile)) {
     }
 }
 
-define('TURNSTILE_SECRET_KEY', $_ENV['TURNSTILE_SECRET_KEY'] ?? getenv('TURNSTILE_SECRET_KEY') ?: '');
+define('RECAPTCHA_SECRET_KEY', $_ENV['RECAPTCHA_SECRET_KEY'] ?? getenv('RECAPTCHA_SECRET_KEY') ?: '');
 define('WHATSAPP_NUMBER',      $_ENV['WHATSAPP_NUMBER']      ?? getenv('WHATSAPP_NUMBER')      ?: '');
 define('ALLOWED_HOSTNAMES',    $_ENV['ALLOWED_HOSTNAMES']    ?? getenv('ALLOWED_HOSTNAMES')    ?: '');
 
-define('TURNSTILE_VERIFY_URL', 'https://challenges.cloudflare.com/turnstile/v0/siteverify');
-define('TURNSTILE_ACTION',     'whatsapp');
+define('RECAPTCHA_VERIFY_URL', 'https://www.google.com/recaptcha/api/siteverify');
+define('RECAPTCHA_MIN_SCORE',  0.5);  // Score minimo: 0.0 (bot) a 1.0 (humano). 0.5 e o padrao recomendado.
+define('RECAPTCHA_ACTION',     'whatsapp');
 define('DEFAULT_MESSAGE',      'Ola! Vim pelo site da NANPA Tecnologia e gostaria de mais informacoes.');
 
 define('RATE_DIR',  sys_get_temp_dir() . '/nanpa_rl');
@@ -138,13 +138,14 @@ function cleanOldFiles(): void
 
 // ---- Turnstile verification -------------------------------------------------
 
-function verifyTurnstile(string $token, string $ip): array
+// ---- reCAPTCHA v3 verification ---------------------------------------------
+
+function verifyRecaptcha(string $token, string $ip): array
 {
     $post = http_build_query([
-        'secret'          => TURNSTILE_SECRET_KEY,
-        'response'        => $token,
-        'remoteip'        => $ip,
-        'idempotency_key' => bin2hex(random_bytes(16)),
+        'secret'   => RECAPTCHA_SECRET_KEY,
+        'response' => $token,
+        'remoteip' => $ip,
     ]);
 
     $ctx = stream_context_create([
@@ -158,7 +159,7 @@ function verifyTurnstile(string $token, string $ip): array
         'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
     ]);
 
-    $res = @file_get_contents(TURNSTILE_VERIFY_URL, false, $ctx);
+    $res = @file_get_contents(RECAPTCHA_VERIFY_URL, false, $ctx);
     if ($res === false) throw new RuntimeException('Falha na conexao com siteverify');
     $result = @json_decode($res, true);
     if (!is_array($result)) throw new RuntimeException('Resposta invalida do siteverify');
@@ -173,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $phone = preg_replace('/\D/', '', WHATSAPP_NUMBER);
-if (!TURNSTILE_SECRET_KEY || !preg_match('/^\d{10,15}$/', $phone)) {
+if (!RECAPTCHA_SECRET_KEY || !preg_match('/^\d{10,15}$/', $phone)) {
     error_log('nanpa/whatsapp: variaveis de ambiente ausentes');
     fail(503, 'unavailable');
 }
@@ -201,27 +202,29 @@ if ($raw === false || strlen($raw) > 2048) fail(413, 'bad_request');
 $body = @json_decode($raw, true);
 if (!is_array($body) || isset($body[0])) fail(400, 'bad_request');
 
+// Token reCAPTCHA v3: base64url + ponto separador, minimo 20 chars
 $token = isset($body['token']) && is_string($body['token']) ? $body['token'] : '';
-if (strlen($token) < 20 || strlen($token) > 2048 || !preg_match('/^[\w.\-:]+$/', $token)) {
+if (strlen($token) < 20 || strlen($token) > 4096 || !preg_match('/^[A-Za-z0-9_\-\.]+$/', $token)) {
     fail(400, 'bad_request');
 }
 
 try {
-    $outcome = verifyTurnstile($token, $ip);
+    $outcome = verifyRecaptcha($token, $ip);
 } catch (Throwable $e) {
     error_log('nanpa/whatsapp: siteverify error — ' . $e->getMessage());
     fail(502, 'verification_unavailable');
 }
 
-$validHost = !empty($outcome['hostname'])
-    && in_array(strtolower($outcome['hostname']), $hosts, true);
+// Validacao reCAPTCHA v3: sucesso + score acima do minimo + action correta
+$score  = (float)($outcome['score']  ?? 0.0);
+$action = (string)($outcome['action'] ?? '');
 
-if (empty($outcome['success']) || ($outcome['action'] ?? '') !== TURNSTILE_ACTION || !$validHost) {
-    error_log('nanpa/whatsapp: verificacao falhou — ' . json_encode([
-        'success'  => $outcome['success']  ?? null,
-        'action'   => $outcome['action']   ?? null,
-        'hostname' => $outcome['hostname'] ?? null,
-        'errors'   => $outcome['error-codes'] ?? [],
+if (empty($outcome['success']) || $score < RECAPTCHA_MIN_SCORE || $action !== RECAPTCHA_ACTION) {
+    error_log('nanpa/whatsapp: recaptcha falhou — ' . json_encode([
+        'success' => $outcome['success'] ?? null,
+        'score'   => $score,
+        'action'  => $action,
+        'errors'  => $outcome['error-codes'] ?? [],
     ]));
     fail(403, 'verification_failed');
 }
