@@ -420,10 +420,11 @@ function initLightbox() {
 
 /* ---- Smooth Scroll ---- */
 function initSmoothScroll() {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    document.querySelectorAll('a[href^="#"]:not(.wa-captcha-link)').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             e.preventDefault();
             const targetId = this.getAttribute('href');
+            if (targetId === '#') return;
             const target = document.querySelector(targetId);
             if (target) {
                 const offsetTop = target.offsetTop - 80;
