@@ -11,28 +11,57 @@
 
 declare(strict_types=1);
 
-// Carrega arquivo de configuracao fora do document root
-// Caminho recomendado no Hostinger: /home/u123456789/env/whatsapp.env
-$envFile = dirname(__DIR__, 2) . '/env/whatsapp.env';
-if (is_file($envFile) && is_readable($envFile)) {
-    foreach (parse_ini_file($envFile) as $k => $v) {
-        $_ENV[$k] = $v;
+// Carrega arquivo de configuracao fora do document root ou em caminhos alternativos
+$candidatePaths = [
+    dirname(__DIR__, 2) . '/env/whatsapp.env',         // Padrão: /home/user/env/whatsapp.env
+    dirname(__DIR__, 3) . '/env/whatsapp.env',         // Em caso de subpasta domains/
+    dirname(__DIR__, 1) . '/env/whatsapp.env',         // Se criado dentro de public_html/env/
+    dirname(__DIR__, 1) . '/../env/whatsapp.env',
+    dirname(__DIR__, 1) . '/.env',
+    __DIR__ . '/whatsapp.env',
+];
+
+foreach ($candidatePaths as $path) {
+    if (is_file($path) && is_readable($path)) {
+        // Tenta parse_ini_file
+        $parsed = @parse_ini_file($path, false, INI_SCANNER_RAW);
+        if ($parsed !== false && is_array($parsed)) {
+            foreach ($parsed as $k => $v) {
+                $_ENV[$k] = trim((string)$v, " \t\n\r\0\x0B\"'");
+            }
+            break;
+        }
+        // Fallback: parse linha a linha caso haja formato não padrão
+        $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines !== false) {
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '' || $line[0] === ';' || $line[0] === '#') continue;
+                $parts = explode('=', $line, 2);
+                if (count($parts) === 2) {
+                    $_ENV[trim($parts[0])] = trim($parts[1], " \t\n\r\0\x0B\"'");
+                }
+            }
+            break;
+        }
     }
 }
 
-define('RECAPTCHA_SECRET_KEY', $_ENV['RECAPTCHA_SECRET_KEY'] ?? getenv('RECAPTCHA_SECRET_KEY') ?: '');
-define('WHATSAPP_NUMBER',      $_ENV['WHATSAPP_NUMBER']      ?? getenv('WHATSAPP_NUMBER')      ?: '');
+define('RECAPTCHA_SECRET_KEY', trim($_ENV['RECAPTCHA_SECRET_KEY'] ?? getenv('RECAPTCHA_SECRET_KEY') ?: ''));
+define('WHATSAPP_NUMBER',      preg_replace('/\D/', '', (string)($_ENV['WHATSAPP_NUMBER'] ?? getenv('WHATSAPP_NUMBER') ?: '')));
 define('ALLOWED_HOSTNAMES',    $_ENV['ALLOWED_HOSTNAMES']    ?? getenv('ALLOWED_HOSTNAMES')    ?: '');
 
 define('RECAPTCHA_VERIFY_URL', 'https://www.google.com/recaptcha/api/siteverify');
-define('RECAPTCHA_MIN_SCORE',  0.5);  // Score minimo: 0.0 (bot) a 1.0 (humano). 0.5 e o padrao recomendado.
+// Score mínimo flexível: se definido no .env usa ele, senão 0.3 (evita falso-positivo em domínios novos)
+$minScoreConfig = (float)($_ENV['RECAPTCHA_MIN_SCORE'] ?? getenv('RECAPTCHA_MIN_SCORE') ?: 0.3);
+define('RECAPTCHA_MIN_SCORE',  $minScoreConfig > 0 ? $minScoreConfig : 0.3);
 define('RECAPTCHA_ACTION',     'whatsapp');
 define('DEFAULT_MESSAGE',      'Ola! Vim pelo site da NANPA Tecnologia e gostaria de mais informacoes.');
 
 define('RATE_DIR',  sys_get_temp_dir() . '/nanpa_rl');
-define('RATE_MAX',  5);
+define('RATE_MAX',  10);
 define('RATE_WIN',  60);
-define('ABUSE_MAX', 20);
+define('ABUSE_MAX', 30);
 define('ABUSE_WIN', 600);
 define('ABUSE_BLK', 900);
 
@@ -53,15 +82,23 @@ function sendJson(int $status, array $body, array $extraHeaders = []): void
 
 function fail(int $status, string $code, array $extra = []): void
 {
-    sendJson($status, ['ok' => false, 'error' => $code], $extra);
+    sendJson($status, array_merge(['ok' => false, 'error' => $code], $extra));
 }
 
 function getAllowedHosts(): array
 {
-    $configured = array_filter(array_map('trim', explode(',', ALLOWED_HOSTNAMES)));
-    return $configured
-        ? array_map('strtolower', $configured)
-        : [strtolower($_SERVER['HTTP_HOST'] ?? 'localhost')];
+    $raw = ALLOWED_HOSTNAMES ? explode(',', ALLOWED_HOSTNAMES) : [$_SERVER['HTTP_HOST'] ?? 'localhost'];
+    $hosts = [];
+    foreach ($raw as $h) {
+        $h = strtolower(trim($h));
+        if ($h) {
+            $hosts[] = $h;
+            $clean = preg_replace('/^www\./i', '', $h);
+            if ($clean !== $h) $hosts[] = $clean;
+            else $hosts[] = 'www.' . $h;
+        }
+    }
+    return array_unique($hosts);
 }
 
 function getClientIp(): string
@@ -72,14 +109,22 @@ function getClientIp(): string
 function isAllowedOrigin(array $hosts): bool
 {
     $source = $_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? '';
-    if (!$source) return false;
+    if (!$source) return true; // Permite se o navegador suprimir por política estrita de privacidade
     $parsed = parse_url($source);
-    if (!$parsed || empty($parsed['host'])) return false;
+    if (!$parsed || empty($parsed['host'])) return true;
     $host   = strtolower($parsed['host']);
     $scheme = strtolower($parsed['scheme'] ?? '');
     $local  = in_array($host, ['localhost', '127.0.0.1'], true);
     if ($scheme !== 'https' && !$local) return false;
-    return in_array($host, $hosts, true);
+
+    $cleanHost = preg_replace('/^www\./i', '', $host);
+    foreach ($hosts as $allowed) {
+        $cleanAllowed = preg_replace('/^www\./i', '', strtolower(trim($allowed)));
+        if ($cleanHost === $cleanAllowed || $host === strtolower(trim($allowed))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- Rate Limiting (file-based) ---------------------------------------------
@@ -148,18 +193,40 @@ function verifyRecaptcha(string $token, string $ip): array
         'remoteip' => $ip,
     ]);
 
-    $ctx = stream_context_create([
-        'http' => [
-            'method'        => 'POST',
-            'header'        => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: NANPA-WA-Protect/1.0\r\n",
-            'content'       => $post,
-            'timeout'       => 8,
-            'ignore_errors' => true,
-        ],
-        'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
-    ]);
+    $res = false;
 
-    $res = @file_get_contents(RECAPTCHA_VERIFY_URL, false, $ctx);
+    // Tenta cURL primeiro (muito mais rápido e confiável no PHP/Apache)
+    if (function_exists('curl_init')) {
+        $ch = curl_init(RECAPTCHA_VERIFY_URL);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $post,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT      => 'NANPA-WA-Protect/1.0',
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
+        ]);
+        $res = curl_exec($ch);
+        curl_close($ch);
+    }
+
+    // Fallback para file_get_contents se cURL não estiver disponível ou falhar
+    if ($res === false) {
+        $ctx = stream_context_create([
+            'http' => [
+                'method'        => 'POST',
+                'header'        => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: NANPA-WA-Protect/1.0\r\n",
+                'content'       => $post,
+                'timeout'       => 8,
+                'ignore_errors' => true,
+            ],
+            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+        ]);
+        $res = @file_get_contents(RECAPTCHA_VERIFY_URL, false, $ctx);
+    }
+
     if ($res === false) throw new RuntimeException('Falha na conexao com siteverify');
     $result = @json_decode($res, true);
     if (!is_array($result)) throw new RuntimeException('Resposta invalida do siteverify');
