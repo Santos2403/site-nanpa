@@ -376,8 +376,15 @@ function initCaptchaVerification() {
         try { data = await res.json(); } catch {}
 
         if (!res.ok || !data || !data.ok) {
+            console.warn('[NANPA WhatsApp Error]', res.status, data);
             if (res.status === 429) return showError('Muitas tentativas seguidas. Aguarde um minuto e tente novamente.');
             if (res.status === 403) return showError('Não foi possível confirmar a verificação. Tente novamente.');
+            if (data && data.error === 'missing_secret_key') {
+                return showError('Configuração do WhatsApp pendente no servidor. Entre em contato por e-mail.');
+            }
+            if (data && data.error === 'invalid_phone') {
+                return showError('Número do WhatsApp não configurado corretamente no servidor.');
+            }
             return showError(GENERIC_ERROR);
         }
 

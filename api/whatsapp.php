@@ -241,19 +241,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $phone = preg_replace('/\D/', '', WHATSAPP_NUMBER);
-if (!RECAPTCHA_SECRET_KEY || !preg_match('/^\d{10,15}$/', $phone)) {
-    error_log('nanpa/whatsapp: variaveis de ambiente ausentes');
-    fail(503, 'unavailable');
+if (!RECAPTCHA_SECRET_KEY) {
+    error_log('nanpa/whatsapp: RECAPTCHA_SECRET_KEY ausente');
+    $existing = [];
+    foreach ($candidatePaths as $p) {
+        if (is_file($p)) $existing[] = $p;
+    }
+    fail(503, 'missing_secret_key', ['env_found' => !empty($existing), 'locations_checked' => count($candidatePaths)]);
+}
+
+if (!preg_match('/^\d{10,15}$/', $phone)) {
+    error_log('nanpa/whatsapp: WHATSAPP_NUMBER invalido (' . substr($phone, 0, 4) . '...)');
+    fail(503, 'invalid_phone');
 }
 
 $hosts = getAllowedHosts();
-if (!isAllowedOrigin($hosts)) fail(403, 'forbidden');
+if (!isAllowedOrigin($hosts)) fail(403, 'forbidden_origin');
 
-if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'nanpa-wa') fail(403, 'forbidden');
+if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'nanpa-wa') fail(403, 'forbidden_header');
 
 $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
 $bots = '/\b(curl|wget|python-requests|python-urllib|aiohttp|httpx|go-http-client|java\/|okhttp|libwww-perl|scrapy|node-fetch|axios|headlesschrome|phantomjs|puppeteer|playwright|selenium)\b/i';
-if (!$ua || preg_match($bots, $ua)) fail(403, 'forbidden');
+if (!$ua || preg_match($bots, $ua)) fail(403, 'forbidden_bot');
 
 $ip         = getClientIp();
 $retryAfter = checkRateLimit($ip);
@@ -261,25 +270,25 @@ cleanOldFiles();
 if ($retryAfter > 0) fail(429, 'rate_limited', ["Retry-After: $retryAfter"]);
 
 $ct = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
-if (strpos($ct, 'application/json') === false) fail(415, 'bad_request');
+if (strpos($ct, 'application/json') === false) fail(415, 'bad_content_type');
 
 $raw = file_get_contents('php://input', false, null, 0, 2049);
-if ($raw === false || strlen($raw) > 2048) fail(413, 'bad_request');
+if ($raw === false || strlen($raw) > 2048) fail(413, 'bad_payload_size');
 
 $body = @json_decode($raw, true);
-if (!is_array($body) || isset($body[0])) fail(400, 'bad_request');
+if (!is_array($body) || isset($body[0])) fail(400, 'bad_json');
 
 // Token reCAPTCHA v3: base64url + ponto separador, minimo 20 chars
 $token = isset($body['token']) && is_string($body['token']) ? $body['token'] : '';
 if (strlen($token) < 20 || strlen($token) > 4096 || !preg_match('/^[A-Za-z0-9_\-\.]+$/', $token)) {
-    fail(400, 'bad_request');
+    fail(400, 'bad_token_format');
 }
 
 try {
     $outcome = verifyRecaptcha($token, $ip);
 } catch (Throwable $e) {
     error_log('nanpa/whatsapp: siteverify error — ' . $e->getMessage());
-    fail(502, 'verification_unavailable');
+    fail(502, 'verification_service_unavailable');
 }
 
 // Validacao reCAPTCHA v3: sucesso + score acima do minimo + action correta
@@ -293,7 +302,11 @@ if (empty($outcome['success']) || $score < RECAPTCHA_MIN_SCORE || $action !== RE
         'action'  => $action,
         'errors'  => $outcome['error-codes'] ?? [],
     ]));
-    fail(403, 'verification_failed');
+    fail(403, 'verification_failed', [
+        'score'  => $score,
+        'action' => $action,
+        'google_errors' => $outcome['error-codes'] ?? [],
+    ]);
 }
 
 $waUrl = 'https://wa.me/' . $phone . '?text=' . rawurlencode(DEFAULT_MESSAGE);
