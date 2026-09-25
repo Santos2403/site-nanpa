@@ -2821,3 +2821,181 @@ body.nav-open .whatsapp-float {
     .btn                    { padding: 12px 18px; }
     .product-body           { padding: var(--space-lg); }
 }
+
+/* =======================================
+   Anti-Bot CAPTCHA Modal
+   ======================================= */
+.captcha-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.captcha-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.captcha-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 12, 24, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.captcha-modal-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 440px;
+    background: linear-gradient(145deg, #102444 0%, #0a1628 100%);
+    border: 1.5px solid rgba(43, 125, 233, 0.35);
+    border-radius: var(--radius-xl);
+    padding: 2.25rem 2rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(43, 125, 233, 0.2);
+    transform: scale(0.92) translateY(15px);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.captcha-modal.active .captcha-modal-card {
+    transform: scale(1) translateY(0);
+}
+
+.captcha-close {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.captcha-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    transform: rotate(90deg);
+}
+
+.captcha-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.captcha-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(43, 125, 233, 0.15);
+    border: 1px solid rgba(43, 125, 233, 0.3);
+    color: var(--accent-teal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    box-shadow: 0 0 20px rgba(78, 205, 196, 0.2);
+}
+
+.captcha-header h3 {
+    font-size: 1.35rem;
+    color: #ffffff;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.captcha-header p {
+    font-size: 0.9rem;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.captcha-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.captcha-challenge {
+    background: rgba(15, 31, 53, 0.9);
+    border: 1px solid rgba(43, 125, 233, 0.2);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    text-align: center;
+    font-size: 1.15rem;
+    color: #f1f5f9;
+}
+
+.captcha-challenge strong {
+    color: var(--accent-teal);
+    font-size: 1.35rem;
+    padding: 0 4px;
+}
+
+.captcha-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.captcha-form input {
+    width: 100%;
+    padding: 14px 18px;
+    background: rgba(10, 22, 40, 0.8);
+    border: 1.5px solid rgba(43, 125, 233, 0.25);
+    border-radius: var(--radius-md);
+    color: #ffffff;
+    font-size: 1.1rem;
+    text-align: center;
+    letter-spacing: 2px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.captcha-form input:focus {
+    border-color: var(--accent-teal);
+    box-shadow: 0 0 15px rgba(78, 205, 196, 0.3);
+}
+
+.captcha-form input.error {
+    border-color: #ef4444;
+    animation: captchaShake 0.4s ease;
+}
+
+.captcha-feedback {
+    min-height: 22px;
+    font-size: 0.875rem;
+    text-align: center;
+    font-weight: 500;
+    transition: opacity 0.2s ease;
+}
+
+.captcha-feedback.error-msg {
+    color: #f87171;
+}
+
+.captcha-feedback.success-msg {
+    color: #4ade80;
+}
+
+@keyframes captchaShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}

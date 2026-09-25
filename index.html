@@ -853,6 +853,10 @@
                     </div>
                 </div>
                 <form class="contact-form reveal-right" id="contact-form">
+                    <!-- Anti-Bot Honeypot (invisible to humans, traps automated bots) -->
+                    <div style="opacity:0; position:absolute; top:-9999px; left:-9999px; height:0; width:0; overflow:hidden;" aria-hidden="true">
+                        <input type="text" name="b_address_hp" id="b_address_hp" tabindex="-1" value="" autocomplete="off">
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="name">Nome</label>
@@ -948,6 +952,33 @@
         </div>
         <span class="whatsapp-float__label">Fale Conosco</span>
     </a>
+
+    <!-- ========== Anti-Bot CAPTCHA Modal ========== -->
+    <div id="captcha-modal" class="captcha-modal" aria-hidden="true" role="dialog" aria-labelledby="captcha-title">
+        <div class="captcha-modal-overlay" id="captcha-overlay"></div>
+        <div class="captcha-modal-card">
+            <button class="captcha-close" id="captcha-close" aria-label="Fechar">&times;</button>
+            <div class="captcha-header">
+                <div class="captcha-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <h3 id="captcha-title">Verificação de Segurança</h3>
+                <p>Confirme que você é humano para se conectar ao WhatsApp da <strong>NANPA Tecnologia</strong>.</p>
+            </div>
+            <div class="captcha-body">
+                <div class="captcha-challenge">
+                    <span>Quanto é <strong id="captcha-n1">0</strong> + <strong id="captcha-n2">0</strong> ?</span>
+                </div>
+                <div class="captcha-form">
+                    <input type="number" id="captcha-input" placeholder="Digite a resposta" autocomplete="off" min="0" max="99">
+                    <button type="button" id="captcha-btn" class="btn btn-primary">
+                        <span style="position:relative;z-index:1">Verificar & Abrir WhatsApp</span>
+                    </button>
+                </div>
+                <div id="captcha-feedback" class="captcha-feedback"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script src="js/main.js"></script>

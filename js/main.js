@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initContactForm();
     initSmoothScroll();
     initLightbox();
+    initCaptchaVerification();
 });
 
 /* ---- Navigation ---- */
@@ -245,10 +246,16 @@ function initContactForm() {
     form.addEventListener('submit', (e) => {
         e.preventDefault();
 
+        // Check Anti-Bot Honeypot field
+        const honeypot = form.querySelector('[name="b_address_hp"]');
+        if (honeypot && honeypot.value.trim() !== '') {
+            // Automated bot detected -> silently block submission
+            return;
+        }
+
         const btn = form.querySelector('.btn-submit');
         const originalText = btn.innerHTML;
 
-        // Simulate submission
         btn.innerHTML = '<span style="position:relative;z-index:1">Enviando...</span>';
         btn.disabled = true;
         btn.style.opacity = '0.7';
@@ -264,7 +271,111 @@ function initContactForm() {
                 btn.style.background = '';
                 form.reset();
             }, 3000);
-        }, 1500);
+        }, 1200);
+    });
+}
+
+/* ---- Anti-Bot CAPTCHA Verification ---- */
+function initCaptchaVerification() {
+    const modal = document.getElementById('captcha-modal');
+    if (!modal) return;
+
+    const overlay = document.getElementById('captcha-overlay');
+    const closeBtn = document.getElementById('captcha-close');
+    const input = document.getElementById('captcha-input');
+    const verifyBtn = document.getElementById('captcha-btn');
+    const feedback = document.getElementById('captcha-feedback');
+    const n1El = document.getElementById('captcha-n1');
+    const n2El = document.getElementById('captcha-n2');
+
+    let expectedSum = 0;
+    let pendingMessage = '';
+
+    // Obfuscate phone number string dynamically in JS to prevent basic web scrapers
+    const buildWaUrl = (textMsg) => {
+        const p1 = '55';
+        const p2 = '61';
+        const p3 = '994167839';
+        const phone = p1 + p2 + p3;
+        const msg = textMsg || 'Olá! Vim pelo site da NANPA Tecnologia e gostaria de mais informações.';
+        return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    };
+
+    function generateChallenge() {
+        const num1 = Math.floor(Math.random() * 8) + 2;
+        const num2 = Math.floor(Math.random() * 8) + 1;
+        expectedSum = num1 + num2;
+        n1El.textContent = num1;
+        n2El.textContent = num2;
+        input.value = '';
+        input.classList.remove('error');
+        feedback.textContent = '';
+        feedback.className = 'captcha-feedback';
+    }
+
+    function openCaptchaModal(msg) {
+        pendingMessage = msg || '';
+        generateChallenge();
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => input.focus(), 150);
+    }
+
+    function closeCaptchaModal() {
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    function verifyAndRedirect() {
+        const userVal = parseInt(input.value.trim(), 10);
+        if (isNaN(userVal) || userVal !== expectedSum) {
+            input.classList.add('error');
+            feedback.textContent = 'Resposta incorreta. Tente novamente!';
+            feedback.className = 'captcha-feedback error-msg';
+            setTimeout(() => input.classList.remove('error'), 400);
+            return;
+        }
+
+        // Verified Human
+        feedback.textContent = '✓ Verificado! Abrindo WhatsApp...';
+        feedback.className = 'captcha-feedback success-msg';
+        verifyBtn.disabled = true;
+
+        setTimeout(() => {
+            const finalUrl = buildWaUrl(pendingMessage);
+            window.open(finalUrl, '_blank', 'noopener,noreferrer');
+            closeCaptchaModal();
+            verifyBtn.disabled = false;
+        }, 500);
+    }
+
+    // Intercept clicks on all WhatsApp buttons and links
+    document.querySelectorAll('.wa-captcha-link, #whatsapp-float, a[href*="wa.me"]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            let customMsg = '';
+            const rawHref = link.getAttribute('href') || '';
+            if (rawHref.includes('text=')) {
+                try {
+                    const urlObj = new URL(rawHref, window.location.href);
+                    customMsg = urlObj.searchParams.get('text') || '';
+                } catch (err) {}
+            }
+            openCaptchaModal(customMsg);
+        });
+    });
+
+    verifyBtn.addEventListener('click', verifyAndRedirect);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') verifyAndRedirect();
+    });
+
+    closeBtn.addEventListener('click', closeCaptchaModal);
+    overlay.addEventListener('click', closeCaptchaModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) closeCaptchaModal();
     });
 }
 
