@@ -1,0 +1,8 @@
+# Copie para .dev.vars (nunca versionar) para testar localmente com:
+#   npx wrangler pages dev .
+#
+# Chaves de TESTE oficiais do Turnstile (sempre aprovam);
+# o siteverify de teste retorna hostname "localhost".
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+WHATSAPP_NUMBER=5500000000000
+ALLOWED_HOSTNAMES=localhost,127.0.0.1

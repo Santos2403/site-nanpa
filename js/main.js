@@ -275,107 +275,189 @@ function initContactForm() {
     });
 }
 
-/* ---- Anti-Bot CAPTCHA Verification ---- */
+/* ---- WhatsApp protegido: Turnstile + validação no servidor ---- */
 function initCaptchaVerification() {
     const modal = document.getElementById('captcha-modal');
     if (!modal) return;
 
     const overlay = document.getElementById('captcha-overlay');
     const closeBtn = document.getElementById('captcha-close');
-    const input = document.getElementById('captcha-input');
-    const verifyBtn = document.getElementById('captcha-btn');
+    const retryBtn = document.getElementById('captcha-btn');
+    const openLink = document.getElementById('wa-open-link');
     const feedback = document.getElementById('captcha-feedback');
-    const n1El = document.getElementById('captcha-n1');
-    const n2El = document.getElementById('captcha-n2');
+    const widgetEl = document.getElementById('wa-turnstile');
+    const triggers = document.querySelectorAll('.wa-captcha-link');
 
-    let expectedSum = 0;
-    let pendingMessage = '';
+    const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    const TEST_SITEKEY = '1x00000000000000000000AA';
+    const metaKey = (document.querySelector('meta[name="turnstile-sitekey"]') || {}).content || '';
+    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    const siteKey = /^[\w-]{10,}$/.test(metaKey) && !metaKey.startsWith('COLOQUE') ? metaKey : (isLocal ? TEST_SITEKEY : '');
 
-    // Obfuscate phone number string dynamically in JS to prevent basic web scrapers
-    const buildWaUrl = (textMsg) => {
-        const p1 = '55';
-        const p2 = '61';
-        const p3 = '994167839';
-        const phone = p1 + p2 + p3;
-        const msg = textMsg || 'Olá! Vim pelo site da NANPA Tecnologia e gostaria de mais informações.';
-        return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-    };
+    let scriptPromise = null;
+    let widgetId = null;
+    let busy = false;
+    let timeoutId = null;
 
-    function generateChallenge() {
-        const num1 = Math.floor(Math.random() * 8) + 2;
-        const num2 = Math.floor(Math.random() * 8) + 1;
-        expectedSum = num1 + num2;
-        n1El.textContent = num1;
-        n2El.textContent = num2;
-        input.value = '';
-        input.classList.remove('error');
-        feedback.textContent = '';
-        feedback.className = 'captcha-feedback';
+    function loadTurnstile() {
+        if (window.turnstile) return Promise.resolve(window.turnstile);
+        if (scriptPromise) return scriptPromise;
+        scriptPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = TURNSTILE_SRC;
+            script.async = true;
+            script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('turnstile')));
+            script.onerror = () => {
+                scriptPromise = null;
+                script.remove();
+                reject(new Error('turnstile'));
+            };
+            document.head.appendChild(script);
+        });
+        return scriptPromise;
     }
 
-    function openCaptchaModal(msg) {
-        pendingMessage = msg || '';
-        generateChallenge();
+    function setStatus(text, kind) {
+        feedback.textContent = text;
+        feedback.className = 'captcha-feedback' + (kind ? ` ${kind}-msg` : '');
+    }
+
+    function showError(text) {
+        busy = false;
+        clearTimeout(timeoutId);
+        setStatus(text, 'error');
+        retryBtn.hidden = false;
+    }
+
+    function openModal() {
         modal.classList.add('active');
         modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
-        setTimeout(() => input.focus(), 150);
     }
 
-    function closeCaptchaModal() {
+    function closeModal() {
         modal.classList.remove('active');
         modal.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
+        clearTimeout(timeoutId);
+        busy = false;
     }
 
-    function verifyAndRedirect() {
-        const userVal = parseInt(input.value.trim(), 10);
-        if (isNaN(userVal) || userVal !== expectedSum) {
-            input.classList.add('error');
-            feedback.textContent = 'Resposta incorreta. Tente novamente!';
-            feedback.className = 'captcha-feedback error-msg';
-            setTimeout(() => input.classList.remove('error'), 400);
-            return;
+    const GENERIC_ERROR = 'Serviço temporariamente indisponível. Tente novamente ou use nosso e-mail.';
+
+    async function requestWhatsAppUrl(token) {
+        let res;
+        try {
+            res = await fetch('/api/whatsapp.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'nanpa-wa',
+                },
+                body: JSON.stringify({ token }),
+            });
+        } catch {
+            return showError('Falha de conexão. Verifique sua internet e tente novamente.');
+        }
+        if (!busy) return;
+
+        let data = null;
+        try { data = await res.json(); } catch {}
+
+        if (!res.ok || !data || !data.ok) {
+            if (res.status === 429) return showError('Muitas tentativas seguidas. Aguarde um minuto e tente novamente.');
+            if (res.status === 403) return showError('Não foi possível confirmar a verificação. Tente novamente.');
+            return showError(GENERIC_ERROR);
         }
 
-        // Verified Human
-        feedback.textContent = '✓ Verificado! Abrindo WhatsApp...';
-        feedback.className = 'captcha-feedback success-msg';
-        verifyBtn.disabled = true;
+        let target = null;
+        try { target = new URL(data.url); } catch {}
+        if (!target || target.protocol !== 'https:' || target.hostname !== 'wa.me') {
+            return showError(GENERIC_ERROR);
+        }
 
-        setTimeout(() => {
-            const finalUrl = buildWaUrl(pendingMessage);
-            window.open(finalUrl, '_blank', 'noopener,noreferrer');
-            closeCaptchaModal();
-            verifyBtn.disabled = false;
-        }, 500);
+        busy = false;
+        clearTimeout(timeoutId);
+        openLink.href = target.href;
+
+        // Navegadores podem bloquear popup após chamada assíncrona; nesse caso o link manual aparece.
+        const win = window.open(target.href, '_blank');
+        if (win) {
+            try { win.opener = null; } catch {}
+            setStatus('✓ Verificado! Abrindo WhatsApp...', 'success');
+            setTimeout(closeModal, 600);
+        } else {
+            setStatus('✓ Verificado! Toque no botão abaixo para abrir o WhatsApp.', 'success');
+            openLink.hidden = false;
+        }
     }
 
-    // Intercept clicks on all WhatsApp buttons and links
-    document.querySelectorAll('.wa-captcha-link, #whatsapp-float, a[href*="wa.me"]').forEach(link => {
-        link.addEventListener('click', (e) => {
+    async function startVerification() {
+        if (busy) return;
+        busy = true;
+        retryBtn.hidden = true;
+        openLink.hidden = true;
+        openLink.href = '#';
+        setStatus('Verificando conexão segura...');
+
+        if (!siteKey) return showError('Verificação indisponível no momento. Use nosso e-mail para contato.');
+
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            if (busy) showError('A verificação demorou mais que o esperado. Tente novamente.');
+        }, 20000);
+
+        let ts;
+        try {
+            ts = await loadTurnstile();
+        } catch {
+            return showError('Não foi possível carregar a verificação. Verifique bloqueadores de conteúdo e tente novamente.');
+        }
+        if (!busy) return;
+
+        if (widgetId === null) {
+            widgetId = ts.render(widgetEl, {
+                sitekey: siteKey,
+                action: 'whatsapp',
+                appearance: 'interaction-only',
+                language: 'pt-br',
+                callback: token => { if (busy) requestWhatsAppUrl(token); },
+                'error-callback': () => { showError('Falha na verificação. Tente novamente.'); return true; },
+                'expired-callback': () => ts.reset(widgetId),
+                'timeout-callback': () => showError('A verificação expirou. Tente novamente.'),
+            });
+        } else {
+            ts.reset(widgetId);
+        }
+    }
+
+    const warmUp = () => { if (siteKey) loadTurnstile().catch(() => {}); };
+
+    triggers.forEach(link => {
+        link.addEventListener('pointerenter', warmUp, { once: true });
+        link.addEventListener('touchstart', warmUp, { once: true, passive: true });
+        link.addEventListener('focus', warmUp, { once: true });
+        link.addEventListener('click', e => {
             e.preventDefault();
-            let customMsg = '';
-            const rawHref = link.getAttribute('href') || '';
-            if (rawHref.includes('text=')) {
-                try {
-                    const urlObj = new URL(rawHref, window.location.href);
-                    customMsg = urlObj.searchParams.get('text') || '';
-                } catch (err) {}
-            }
-            openCaptchaModal(customMsg);
+            openModal();
+            startVerification();
         });
     });
 
-    verifyBtn.addEventListener('click', verifyAndRedirect);
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') verifyAndRedirect();
+    openLink.addEventListener('click', e => {
+        if (openLink.getAttribute('href') === '#') {
+            e.preventDefault();
+            return;
+        }
+        setTimeout(closeModal, 300);
     });
-
-    closeBtn.addEventListener('click', closeCaptchaModal);
-    overlay.addEventListener('click', closeCaptchaModal);
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('active')) closeCaptchaModal();
+    retryBtn.addEventListener('click', startVerification);
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', closeModal);
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
     });
 }
 

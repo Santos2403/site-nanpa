@@ -2932,20 +2932,13 @@ body.nav-open .whatsapp-float {
     gap: 1.25rem;
 }
 
-.captcha-challenge {
-    background: rgba(15, 31, 53, 0.9);
-    border: 1px solid rgba(43, 125, 233, 0.2);
-    border-radius: var(--radius-lg);
-    padding: 1rem;
-    text-align: center;
-    font-size: 1.15rem;
-    color: #f1f5f9;
+.wa-turnstile {
+    display: flex;
+    justify-content: center;
 }
 
-.captcha-challenge strong {
-    color: var(--accent-teal);
-    font-size: 1.35rem;
-    padding: 0 4px;
+.wa-turnstile:empty {
+    display: none;
 }
 
 .captcha-form {
@@ -2954,28 +2947,28 @@ body.nav-open .whatsapp-float {
     gap: 0.75rem;
 }
 
-.captcha-form input {
-    width: 100%;
-    padding: 14px 18px;
-    background: rgba(10, 22, 40, 0.8);
-    border: 1.5px solid rgba(43, 125, 233, 0.25);
-    border-radius: var(--radius-md);
-    color: #ffffff;
-    font-size: 1.1rem;
+.captcha-form [hidden] {
+    display: none !important;
+}
+
+.wa-open-link {
+    justify-content: center;
     text-align: center;
-    letter-spacing: 2px;
-    outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.captcha-form input:focus {
-    border-color: var(--accent-teal);
-    box-shadow: 0 0 15px rgba(78, 205, 196, 0.3);
+.btn-label {
+    position: relative;
+    z-index: 1;
 }
 
-.captcha-form input.error {
-    border-color: #ef4444;
-    animation: captchaShake 0.4s ease;
+.contact-detail-text .contact-wa-link {
+    font-size: var(--font-size-sm);
+    color: var(--accent-teal);
+    font-weight: 500;
+}
+
+.contact-detail-text .contact-wa-link:hover {
+    text-decoration: underline;
 }
 
 .captcha-feedback {
@@ -2994,8 +2987,3 @@ body.nav-open .whatsapp-float {
     color: #4ade80;
 }
 
-@keyframes captchaShake {
-    0%, 100% { transform: translateX(0); }
-    20%, 60% { transform: translateX(-8px); }
-    40%, 80% { transform: translateX(8px); }
-}

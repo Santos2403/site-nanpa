@@ -1,0 +1,14 @@
+# Cloudflare Workers (legado)
+.dev.vars
+.wrangler/
+node_modules/
+
+# Logs e temporarios
+*.log
+/tmp/
+
+# Arquivos de credenciais — NUNCA commitar
+# Excecao: arquivos .example sao seguros (sem dados reais)
+*.env
+!whatsapp.env.example
+!.dev.vars.example

@@ -1,0 +1,31 @@
+﻿# wrangler.toml — Cloudflare Pages / Workers configuration
+# Documentação: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "site-nanpa-tec"
+compatibility_date = "2024-09-23"
+
+# =============================================================
+# Rate Limiter Binding (Cloudflare Workers Rate Limiting API)
+# Requer plano Workers Paid ou Pages com Functions habilitadas.
+# https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+# =============================================================
+[[unsafe.bindings]]
+type         = "ratelimit"
+name         = "WA_RATE_LIMITER"
+namespace_id = "1001"
+simple       = { limit = 5, period = 60 }
+
+# =============================================================
+# Variáveis de ambiente (valores reais: .dev.vars local / painel Cloudflare prod)
+# NUNCA coloque valores reais aqui — este arquivo é versionado.
+# =============================================================
+[vars]
+# Hostnames permitidos para validação de Origin/Referer e Turnstile hostname.
+# Separe múltiplos com vírgula. Exemplo: "nanpatec.com.br,www.nanpatec.com.br"
+ALLOWED_HOSTNAMES = ""   # defina no painel Cloudflare → Settings → Environment Variables
+
+# =============================================================
+# Secrets (configure via painel OU CLI — NÃO colocar valores aqui)
+#   wrangler secret put TURNSTILE_SECRET_KEY
+#   wrangler secret put WHATSAPP_NUMBER
+# =============================================================
