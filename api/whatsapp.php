@@ -68,6 +68,7 @@ const TOPIC_MESSAGES = [
     'automacao'    => 'Olá, gostaria de informações sobre automação de ar-condicionado/HVAC.',
     'engenharia'   => 'Olá, gostaria de conversar sobre o desenvolvimento de uma solução técnica sob medida.',
     'produtos'     => 'Olá, gostaria de informações sobre os produtos da NANPA (controladores/termostatos).',
+    'api'          => 'Olá, gostaria de informações sobre a API e a integração do controlador NANPA com o nosso sistema.',
     'robo'         => 'Olá, tenho interesse na aquisição do robô de inspeção/limpeza de dutos da NANPA.',
 ];
 

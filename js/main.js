@@ -208,6 +208,9 @@
                 var sel = document.getElementById('f-servico');
                 if (sel && sel.querySelector('option[value="' + service + '"]')) sel.value = service;
             }
+            var preset = a.getAttribute('data-message');
+            var msg = document.getElementById('f-msg');
+            if (preset && msg && !msg.value.trim()) msg.value = preset;
         });
 
         document.querySelectorAll('video[controls]').forEach(function (v) {
