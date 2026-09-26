@@ -1,9 +1,10 @@
 /* Cloudflare Pages Function — POST /api/whatsapp
-   Valida Turnstile no servidor e só então devolve o link do WhatsApp.
+   Valida reCAPTCHA v3 no servidor e só então devolve o link do WhatsApp.
    O número vive apenas na variável de ambiente WHATSAPP_NUMBER. */
 
-const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-const TURNSTILE_ACTION = 'whatsapp';
+const SITEVERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
+const CAPTCHA_ACTION  = 'whatsapp';
+const MIN_SCORE       = 0.5;            // reCAPTCHA v3: score >= 0.5 indica humano
 const MAX_BODY_BYTES = 2048;     // reduzido: token + pouco overhead
 const MAX_TOKEN_LENGTH = 2048;
 const DEFAULT_MESSAGE = 'Olá! Vim pelo site da NANPA Tecnologia e gostaria de mais informações.';
@@ -84,12 +85,12 @@ function checkRateLimit(key, now) {
     return 0;
 }
 
-async function verifyTurnstile(token, ip, secret) {
+async function verifyCaptcha(token, ip, secret) {
     const form = new FormData();
     form.append('secret', secret);
     form.append('response', token);
     if (ip) form.append('remoteip', ip);
-    form.append('idempotency_key', crypto.randomUUID());
+    // reCAPTCHA v3 não usa idempotency_key
 
     const res = await fetch(SITEVERIFY_URL, {
         method: 'POST',
@@ -106,7 +107,7 @@ export async function onRequestPost({ request, env }) {
         const hosts = allowedHosts(env, url);
 
         const phone = (env.WHATSAPP_NUMBER || '').replace(/\D/g, '');
-        if (!env.TURNSTILE_SECRET_KEY || !/^\d{10,15}$/.test(phone)) {
+        if (!env.RECAPTCHA_SECRET_KEY || !/^\d{10,15}$/.test(phone)) {
             console.error('whatsapp: variáveis de ambiente ausentes ou inválidas');
             return fail(503, 'unavailable');
         }
@@ -156,18 +157,20 @@ export async function onRequestPost({ request, env }) {
 
         let outcome;
         try {
-            outcome = await verifyTurnstile(token, ip, env.TURNSTILE_SECRET_KEY);
+            outcome = await verifyCaptcha(token, ip, env.RECAPTCHA_SECRET_KEY);
         } catch (err) {
-            console.error('whatsapp: falha no siteverify', err && err.message);
+            console.error('whatsapp: falha no siteverify reCAPTCHA', err && err.message);
             return fail(502, 'verification_unavailable');
         }
 
+        const score = typeof outcome.score === 'number' ? outcome.score : 1;
         const validHost = outcome.hostname && hosts.includes(String(outcome.hostname).toLowerCase());
-        if (!outcome.success || outcome.action !== TURNSTILE_ACTION || !validHost) {
+        if (!outcome.success || outcome.action !== CAPTCHA_ACTION || !validHost || score < MIN_SCORE) {
             // Log para monitoramento sem vazar detalhes ao cliente
-            console.warn('whatsapp: verificação falhou', JSON.stringify({
+            console.warn('whatsapp: verificação reCAPTCHA falhou', JSON.stringify({
                 success: outcome.success,
-                action: outcome.action,
+                action:  outcome.action,
+                score:   outcome.score,
                 hostname: outcome.hostname,
                 errors: outcome['error-codes'],
             }));

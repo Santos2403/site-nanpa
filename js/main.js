@@ -275,7 +275,7 @@ function initContactForm() {
     });
 }
 
-/* ---- WhatsApp protegido: reCAPTCHA v3 + valida\u00e7\u00e3o no servidor ---- */
+/* ---- WhatsApp protegido: Google reCAPTCHA v3 + validacao no servidor ---- */
 function initCaptchaVerification() {
     const modal = document.getElementById('captcha-modal');
     if (!modal) return;
@@ -294,30 +294,20 @@ function initCaptchaVerification() {
     let busy = false;
     let timeoutId = null;
 
-    // Carrega o script do reCAPTCHA só quando necessário (lazy load)
     function loadRecaptcha() {
-        if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
-            return Promise.resolve(window.grecaptcha);
-        }
+        if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') return Promise.resolve(window.grecaptcha);
         if (scriptPromise) return scriptPromise;
         scriptPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
+            script.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(siteKey);
             script.async = true;
             script.onload = () => {
                 if (window.grecaptcha && typeof window.grecaptcha.ready === 'function') {
                     window.grecaptcha.ready(() => resolve(window.grecaptcha));
-                } else if (window.grecaptcha) {
-                    resolve(window.grecaptcha);
-                } else {
-                    reject(new Error('recaptcha'));
-                }
+                } else if (window.grecaptcha) { resolve(window.grecaptcha); }
+                else { reject(new Error('recaptcha')); }
             };
-            script.onerror = () => {
-                scriptPromise = null;
-                script.remove();
-                reject(new Error('recaptcha'));
-            };
+            script.onerror = () => { scriptPromise = null; script.remove(); reject(new Error('recaptcha')); };
             document.head.appendChild(script);
         });
         return scriptPromise;
@@ -326,50 +316,28 @@ function initCaptchaVerification() {
     function setStatus(text, kind) {
         if (!feedback) return;
         feedback.textContent = text;
-        feedback.className = 'captcha-feedback' + (kind ? ` ${kind}-msg` : '');
+        feedback.className = 'captcha-feedback' + (kind ? ' ' + kind + '-msg' : '');
     }
 
-    function showError(text) {
-        busy = false;
-        clearTimeout(timeoutId);
-        setStatus(text, 'error');
-        if (retryBtn) retryBtn.hidden = false;
-    }
+    function showError(text) { busy = false; clearTimeout(timeoutId); setStatus(text, 'error'); if (retryBtn) retryBtn.hidden = false; }
 
-    function openModal() {
-        if (!modal) return;
-        modal.classList.add('active');
-        modal.setAttribute('aria-hidden', 'false');
-        document.body.style.overflow = 'hidden';
-    }
+    function openModal() { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden'; }
 
-    function closeModal() {
-        if (!modal) return;
-        modal.classList.remove('active');
-        modal.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
-        clearTimeout(timeoutId);
-        busy = false;
-    }
+    function closeModal() { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; clearTimeout(timeoutId); busy = false; }
 
-    const GENERIC_ERROR = 'Serviço temporariamente indisponível. Tente novamente ou use nosso e-mail.';
+    const GENERIC_ERROR = 'Servico temporariamente indisponivel. Tente novamente ou use nosso e-mail.';
 
     async function requestWhatsAppUrl(token) {
         let res;
         try {
-            res = await fetch('/api/whatsapp.php', {
+            res = await fetch('/api/whatsapp', {
                 method: 'POST',
                 credentials: 'same-origin',
                 cache: 'no-store',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'nanpa-wa',
-                },
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'nanpa-wa' },
                 body: JSON.stringify({ token }),
             });
-        } catch {
-            return showError('Falha de conexão. Verifique sua internet e tente novamente.');
-        }
+        } catch { return showError('Falha de conexao. Verifique sua internet e tente novamente.'); }
         if (!busy) return;
 
         let data = null;
@@ -378,113 +346,61 @@ function initCaptchaVerification() {
         if (!res.ok || !data || !data.ok) {
             console.warn('[NANPA WhatsApp Error]', res.status, data);
             if (res.status === 429) return showError('Muitas tentativas seguidas. Aguarde um minuto e tente novamente.');
-            if (res.status === 403) return showError('Não foi possível confirmar a verificação. Tente novamente.');
-            if (data && data.error === 'missing_secret_key') {
-                return showError('Configuração do WhatsApp pendente no servidor. Entre em contato por e-mail.');
-            }
-            if (data && data.error === 'invalid_phone') {
-                return showError('Número do WhatsApp não configurado corretamente no servidor.');
-            }
+            if (res.status === 403) return showError('Nao foi possivel confirmar a verificacao. Tente novamente.');
             return showError(GENERIC_ERROR);
         }
 
         let target = null;
         try { target = new URL(data.url); } catch {}
-        if (!target || target.protocol !== 'https:' || target.hostname !== 'wa.me') {
-            return showError(GENERIC_ERROR);
-        }
+        if (!target || target.protocol !== 'https:' || target.hostname !== 'wa.me') return showError(GENERIC_ERROR);
 
-        busy = false;
-        clearTimeout(timeoutId);
+        busy = false; clearTimeout(timeoutId);
         if (openLink) openLink.href = target.href;
 
-        // Mobile ou popup bloqueado: abre diretamente ou orienta com botão
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         if (isMobile) {
-            setStatus('✓ Verificado! Abrindo WhatsApp...', 'success');
-            setTimeout(() => {
-                window.location.href = target.href;
-                setTimeout(closeModal, 1200);
-            }, 300);
+            setStatus('V Verificado! Abrindo WhatsApp...', 'success');
+            setTimeout(() => { window.location.href = target.href; setTimeout(closeModal, 1200); }, 300);
             return;
         }
-
         const win = window.open(target.href, '_blank');
-        if (win) {
-            try { win.opener = null; } catch {}
-            setStatus('✓ Verificado! Abrindo WhatsApp...', 'success');
-            setTimeout(closeModal, 600);
-        } else {
-            setStatus('✓ Verificado! Clique no botão abaixo para abrir:', 'success');
-            if (openLink) openLink.hidden = false;
-        }
+        if (win) { try { win.opener = null; } catch {} setStatus('V Verificado! Abrindo WhatsApp...', 'success'); setTimeout(closeModal, 600); }
+        else { setStatus('V Verificado! Clique no botao abaixo para abrir:', 'success'); if (openLink) openLink.hidden = false; }
     }
 
     async function startVerification() {
         if (busy) return;
         busy = true;
         if (retryBtn) retryBtn.hidden = true;
-        if (openLink) {
-            openLink.hidden = true;
-            openLink.href = '#';
-        }
-        setStatus('Verificando conexão segura...');
-
-        if (!siteKey) {
-            return showError('Verificação indisponível no momento. Use nosso e-mail para contato.');
-        }
-
+        if (openLink) { openLink.hidden = true; openLink.href = '#'; }
+        setStatus('Verificando conexao segura...');
+        if (!siteKey) return showError('Verificacao indisponivel no momento. Use nosso e-mail para contato.');
         clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-            if (busy) showError('A verificação demorou mais que o esperado. Tente novamente.');
-        }, 20000);
-
+        timeoutId = setTimeout(() => { if (busy) showError('A verificacao demorou mais que o esperado. Tente novamente.'); }, 20000);
         let rc;
-        try {
-            rc = await loadRecaptcha();
-        } catch {
-            return showError('Não foi possível carregar a verificação. Verifique bloqueadores de conteúdo e tente novamente.');
-        }
+        try { rc = await loadRecaptcha(); }
+        catch { return showError('Nao foi possivel carregar a verificacao. Verifique bloqueadores de conteudo e tente novamente.'); }
         if (!busy) return;
-
         let token;
-        try {
-            // reCAPTCHA v3: invisível, analisa comportamento e retorna token com score
-            token = await rc.execute(siteKey, { action: 'whatsapp' });
-        } catch {
-            return showError('Falha na verificação. Tente novamente.');
-        }
+        try { token = await rc.execute(siteKey, { action: 'whatsapp' }); }
+        catch { return showError('Falha na verificacao. Tente novamente.'); }
         if (!busy) return;
-
         await requestWhatsAppUrl(token);
     }
 
-    // Pré-aquece o script reCAPTCHA no hover/focus (reduz latência percebida)
     const warmUp = () => { if (siteKey) loadRecaptcha().catch(() => {}); };
-
     triggers.forEach(link => {
         link.addEventListener('pointerenter', warmUp, { once: true });
         link.addEventListener('touchstart', warmUp, { once: true, passive: true });
         link.addEventListener('focus', warmUp, { once: true });
-        link.addEventListener('click', e => {
-            e.preventDefault();
-            openModal();
-            startVerification();
-        });
+        link.addEventListener('click', e => { e.preventDefault(); openModal(); startVerification(); });
     });
 
-    if (openLink) {
-        openLink.addEventListener('click', e => {
-            if (openLink.getAttribute('href') === '#') { e.preventDefault(); return; }
-            setTimeout(closeModal, 300);
-        });
-    }
+    if (openLink) { openLink.addEventListener('click', e => { if (openLink.getAttribute('href') === '#') { e.preventDefault(); return; } setTimeout(closeModal, 300); }); }
     if (retryBtn) retryBtn.addEventListener('click', startVerification);
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
     if (overlay)  overlay.addEventListener('click', closeModal);
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && modal && modal.classList.contains('active')) closeModal();
-    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal && modal.classList.contains('active')) closeModal(); });
 }
 
 /* ---- Lightbox (Click to Enlarge) ---- */
