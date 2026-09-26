@@ -273,6 +273,40 @@
     }
 
     /* ---------------------------------------------------------
+       Conversão Google Ads "Nanpa / Whatsapp / Contato".
+       Equivalente ao gtag_report_conversion() do snippet oficial:
+       dispara a conversão e só então segue para o WhatsApp.
+       - fallback de 1 s: a medição nunca impede o contato;
+       - flag "proceeded": o WhatsApp abre uma única vez, mesmo que o
+         event_callback chegue depois do fallback (ou vice-versa);
+       - sem gtag (bloqueador, falha de rede), segue direto.
+       --------------------------------------------------------- */
+    var WA_CONVERSION_SEND_TO = 'AW-362399380/ivAMCP135oYdEJSN56wB';
+    var WA_CONVERSION_TIMEOUT = 1000;
+
+    function reportWhatsAppConversion(proceed) {
+        var proceeded = false;
+        var fallback = null;
+        function go() {
+            if (proceeded) return;
+            proceeded = true;
+            clearTimeout(fallback);
+            proceed();
+        }
+        if (typeof window.gtag !== 'function') { go(); return; }
+        fallback = setTimeout(go, WA_CONVERSION_TIMEOUT);
+        try {
+            window.gtag('event', 'conversion', {
+                send_to: WA_CONVERSION_SEND_TO,
+                event_callback: go,
+                event_timeout: WA_CONVERSION_TIMEOUT
+            });
+        } catch (e) {
+            go();
+        }
+    }
+
+    /* ---------------------------------------------------------
        WhatsApp: o número fica no servidor; o link só é entregue
        após o reCAPTCHA. A mensagem muda conforme a página e inclui
        discretamente a origem do lead.
@@ -297,18 +331,25 @@
         function open() { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); }
         function close() { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); busy = false; clearTimeout(timer); }
 
-        function done(url) {
-            busy = false; clearTimeout(timer);
-            openLink.href = url;
-            track('whatsapp_lead', { wa_topic: current.topic, cta_location: current.location });
+        // Abre o WhatsApp (URL original, com a mensagem pré-preenchida).
+        function openWhatsApp(url) {
             if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                setStatus('Verificado! Abrindo o WhatsApp…', 'success');
-                setTimeout(function () { window.location.href = url; setTimeout(close, 1500); }, 250);
+                window.location.href = url;
+                setTimeout(close, 1500);
                 return;
             }
             var win = window.open(url, '_blank');
-            if (win) { try { win.opener = null; } catch (e) { /* ignore */ } setStatus('Verificado! Abrindo o WhatsApp…', 'success'); setTimeout(close, 700); }
+            if (win) { try { win.opener = null; } catch (e) { /* ignore */ } setTimeout(close, 700); }
             else { setStatus('Verificado! Clique no botão abaixo para abrir:', 'success'); openLink.hidden = false; }
+        }
+
+        // Chamado somente após a validação anti-bot aprovada pelo servidor.
+        function done(url) {
+            busy = false; clearTimeout(timer);
+            openLink.href = url;
+            setStatus('Verificado! Abrindo o WhatsApp…', 'success');
+            track('whatsapp_lead', { wa_topic: current.topic, cta_location: current.location });
+            reportWhatsAppConversion(function () { openWhatsApp(url); });
         }
 
         function start() {
