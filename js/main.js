@@ -67,15 +67,9 @@
     var GTM_ID = /^GTM-[A-Z0-9]{4,12}$/.test(meta('gtm-id')) ? meta('gtm-id') : '';
     var CONSENT_KEY = 'nanpa_consent';
 
-    gtag('consent', 'default', {
-        ad_storage: 'denied',
-        ad_user_data: 'denied',
-        ad_personalization: 'denied',
-        analytics_storage: 'denied',
-        functionality_storage: 'granted',
-        security_storage: 'granted',
-        wait_for_update: 500
-    });
+    // O consentimento padrão (Consent Mode v2) é definido em js/gtag-init.js,
+    // carregado no <head> antes da Google tag.
+    var HAS_GTAG = !!document.querySelector('script[src*="googletagmanager.com/gtag/js"]');
 
     function applyConsent(choice) {
         var v = choice === 'granted' ? 'granted' : 'denied';
@@ -86,7 +80,7 @@
 
     var storedConsent = null;
     try { storedConsent = localStorage.getItem(CONSENT_KEY); } catch (e) { /* ignore */ }
-    if (storedConsent) applyConsent(storedConsent);
+    if (storedConsent && !HAS_GTAG) applyConsent(storedConsent);
 
     function track(event, params) {
         var data = { event: event, page_key: PAGE_KEY, page_path: location.pathname };
@@ -117,7 +111,7 @@
     function initCookieBanner() {
         var banner = document.getElementById('cookie-banner');
         var prefs = document.querySelectorAll('.js-cookie-prefs');
-        if (!banner || !GTM_ID) return; // sem medição configurada, não há cookies a consentir
+        if (!banner || (!GTM_ID && !HAS_GTAG)) return; // sem medição configurada, não há cookies a consentir
         prefs.forEach(function (b) {
             b.hidden = false;
             b.addEventListener('click', function () { banner.hidden = false; });
