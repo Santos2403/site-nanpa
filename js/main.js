@@ -307,6 +307,25 @@
     }
 
     /* ---------------------------------------------------------
+       Conversão Google Ads "NanPa / Formulário / Lead".
+       Chamada somente quando o servidor confirma que o lead foi
+       enviado (resposta { ok: true, sent: true }). Independente da
+       conversão do WhatsApp.
+       --------------------------------------------------------- */
+    var FORM_CONVERSION_SEND_TO = 'AW-362399380/fB-uCM_y6YYdEJSN56wB';
+
+    function reportFormConversion() {
+        if (typeof window.gtag !== 'function') return;
+        try {
+            window.gtag('event', 'conversion', {
+                send_to: FORM_CONVERSION_SEND_TO,
+                value: 1.0,
+                currency: 'BRL'
+            });
+        } catch (e) { /* a medição nunca interfere no formulário */ }
+    }
+
+    /* ---------------------------------------------------------
        WhatsApp: o número fica no servidor; o link só é entregue
        após o reCAPTCHA. A mensagem muda conforme a página e inclui
        discretamente a origem do lead.
@@ -429,6 +448,8 @@
             var submit = form.querySelector('button[type="submit"]');
             var submitLabel = submit.textContent;
             var interacted = false;
+            var sending = false;       // impede envio simultâneo do mesmo formulário
+            var converted = false;     // uma conversão por envio bem-sucedido
 
             form.addEventListener('focusin', function () {
                 if (!interacted) { interacted = true; loadRecaptcha().catch(function () {}); track('form_start', { form_id: form.getAttribute('data-form-id') }); }
@@ -466,6 +487,8 @@
                 status.textContent = ''; status.className = 'form-status';
                 if (form.elements.website && form.elements.website.value) return; // honeypot
                 if (!validate()) return;
+                if (sending || converted) return;
+                sending = true;
 
                 submit.disabled = true;
                 submit.textContent = 'Enviando…';
@@ -495,6 +518,11 @@
                     })
                     .then(function (r) {
                         if (r.res.ok && r.data && r.data.ok) {
+                            sending = false;
+                            if (r.data.sent === true && !converted) {
+                                converted = true;
+                                reportFormConversion();
+                            }
                             track('generate_lead', { form_id: payload.form_id, service_type: payload.service, lead_source: attribution.utm_source || '', lead_campaign: attribution.utm_campaign || '' });
                             showSuccess(form, payload.service);
                             return;
@@ -510,6 +538,7 @@
                     .catch(function (err) {
                         status.className = 'form-status is-error';
                         status.textContent = err && err.userMsg ? err.userMsg : 'Falha de conexão. Verifique sua internet e tente novamente.';
+                        sending = false;
                         submit.disabled = false;
                         submit.textContent = submitLabel;
                     });

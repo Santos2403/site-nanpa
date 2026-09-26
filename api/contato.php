@@ -358,4 +358,5 @@ if (!$sent) {
     fail(502, 'mail_failed');
 }
 
-sendJson(200, ['ok' => true]);
+// "sent" só existe quando o lead foi de fato enviado (usado para a conversão do Google Ads).
+sendJson(200, ['ok' => true, 'sent' => true]);
