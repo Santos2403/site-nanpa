@@ -56,7 +56,20 @@ define('RECAPTCHA_VERIFY_URL', 'https://www.google.com/recaptcha/api/siteverify'
 $minScoreConfig = (float)($_ENV['RECAPTCHA_MIN_SCORE'] ?? getenv('RECAPTCHA_MIN_SCORE') ?: 0.3);
 define('RECAPTCHA_MIN_SCORE',  $minScoreConfig > 0 ? $minScoreConfig : 0.3);
 define('RECAPTCHA_ACTION',     'whatsapp');
-define('DEFAULT_MESSAGE',      'Ola! Vim pelo site da NANPA Tecnologia e gostaria de mais informacoes.');
+define('DEFAULT_MESSAGE',      'Olá! Vim pelo site da NANPA Tecnologia e gostaria de mais informações.');
+
+// Mensagens pré-preenchidas por página/assunto (permite identificar a origem do lead)
+const TOPIC_MESSAGES = [
+    'geral'        => 'Olá! Vim pelo site da NANPA Tecnologia e gostaria de mais informações.',
+    'dutos'        => 'Olá, gostaria de solicitar informações sobre inspeção/limpeza robotizada de dutos.',
+    'cpd'          => 'Olá, encontrei a NANPA pesquisando sobre automação de ar-condicionado para CPD e gostaria de informações.',
+    'chiller'      => 'Olá, gostaria de uma avaliação para retrofit/automação de chiller.',
+    'climatizacao' => 'Olá, gostaria de informações sobre climatização corporativa (instalação/manutenção).',
+    'automacao'    => 'Olá, gostaria de informações sobre automação de ar-condicionado/HVAC.',
+    'engenharia'   => 'Olá, gostaria de conversar sobre o desenvolvimento de uma solução técnica sob medida.',
+    'produtos'     => 'Olá, gostaria de informações sobre os produtos da NANPA (controladores/termostatos).',
+    'robo'         => 'Olá, tenho interesse na aquisição do robô de inspeção/limpeza de dutos da NANPA.',
+];
 
 define('RATE_DIR',  sys_get_temp_dir() . '/nanpa_rl');
 define('RATE_MAX',  10);
@@ -181,8 +194,6 @@ function cleanOldFiles(): void
     }
 }
 
-// ---- Turnstile verification -------------------------------------------------
-
 // ---- reCAPTCHA v3 verification ---------------------------------------------
 
 function verifyRecaptcha(string $token, string $ip): array
@@ -231,6 +242,41 @@ function verifyRecaptcha(string $token, string $ip): array
     $result = @json_decode($res, true);
     if (!is_array($result)) throw new RuntimeException('Resposta invalida do siteverify');
     return $result;
+}
+
+// ---- Origem do lead ------------------------------------------------------------
+
+function cleanRefValue($v): string
+{
+    if (!is_string($v)) return '';
+    $v = preg_replace('/[^\p{L}\p{N} _\-\.\/:+|@]/u', '', $v);
+    if (!is_string($v)) return '';
+    $v = trim($v);
+    return function_exists('mb_substr') ? mb_substr($v, 0, 80, 'UTF-8') : substr($v, 0, 80);
+}
+
+/** Monta um sufixo discreto com página e campanha de origem (ex.: UTMs do Google Ads). */
+function buildRefSuffix($ref): string
+{
+    if (!is_array($ref)) return '';
+    $page    = cleanRefValue($ref['page'] ?? '');
+    $landing = cleanRefValue($ref['landing_page'] ?? '');
+    $source  = cleanRefValue($ref['utm_source'] ?? '');
+    $medium  = cleanRefValue($ref['utm_medium'] ?? '');
+    $camp    = cleanRefValue($ref['utm_campaign'] ?? '');
+    $term    = cleanRefValue($ref['utm_term'] ?? '');
+    $content = cleanRefValue($ref['utm_content'] ?? '');
+    $gclid   = !empty($ref['gclid']) && is_string($ref['gclid']);
+
+    $parts = [];
+    if ($page !== '') $parts[] = 'pág. ' . $page;
+    if ($landing !== '' && $landing !== $page) $parts[] = 'entrada ' . $landing;
+    if ($source !== '' || $medium !== '') $parts[] = trim($source . '/' . $medium, '/');
+    elseif ($gclid) $parts[] = 'google/cpc';
+    if ($camp !== '') $parts[] = 'camp. ' . $camp;
+    if ($term !== '') $parts[] = 'termo ' . $term;
+    if ($content !== '') $parts[] = 'anúncio ' . $content;
+    return $parts ? "\n\n(Ref.: " . implode(' · ', $parts) . ')' : '';
 }
 
 // ---- Main -------------------------------------------------------------------
@@ -309,5 +355,7 @@ if (empty($outcome['success']) || $score < RECAPTCHA_MIN_SCORE || $action !== RE
     ]);
 }
 
-$waUrl = 'https://wa.me/' . $phone . '?text=' . rawurlencode(DEFAULT_MESSAGE);
+$topic   = isset($body['topic']) && is_string($body['topic']) ? $body['topic'] : 'geral';
+$message = (TOPIC_MESSAGES[$topic] ?? DEFAULT_MESSAGE) . buildRefSuffix($body['ref'] ?? null);
+$waUrl   = 'https://wa.me/' . $phone . '?text=' . rawurlencode($message);
 sendJson(200, ['ok' => true, 'url' => $waUrl]);
