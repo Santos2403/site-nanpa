@@ -1,5 +1,5 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.google.com https://www.gstatic.com https://recaptcha.net; frame-src https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://www.gstatic.com; media-src 'self'; connect-src 'self' https://www.google.com https://recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.google.com https://www.gstatic.com https://recaptcha.net https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com; frame-src https://www.google.com https://recaptcha.net https://www.googletagmanager.com https://td.doubleclick.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://www.gstatic.com https://www.google.com https://www.google.com.br https://www.googletagmanager.com https://*.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com; media-src 'self'; connect-src 'self' https://www.google.com https://www.google.com.br https://recaptcha.net https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://www.googleadservices.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
@@ -7,7 +7,6 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Cross-Origin-Resource-Policy: same-origin
-  X-DNS-Prefetch-Control: off
 
 /api/*
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
